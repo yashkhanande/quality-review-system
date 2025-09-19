@@ -1,16 +1,30 @@
 import 'package:flutter/material.dart';
-import 'package:atlas_copco/models/project.dart'; // import the models
-import 'self_review.dart'; // next screen
 
-class Execution extends StatefulWidget {
-  const Execution({super.key});
+import 'dynamic_questions_assigning.dart';
 
+class TeamRoleAssignmentApp extends StatelessWidget {
   @override
-  State<Execution> createState() => _ExecutionState();
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Team Role Assignment',
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+        visualDensity: VisualDensity.adaptivePlatformDensity,
+      ),
+      home: HomePage(),
+      debugShowCheckedModeBanner: false,
+    );
+  }
 }
 
-class _ExecutionState extends State<Execution> {
-  final List<String> employees = [
+class HomePage extends StatefulWidget {
+  @override
+  _HomePageState createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  // Sample team members (without "Add new")
+  final List<String> teamMembers = [
     "Suraj Bansal",
     "Akash Kathe",
     "Suresh Pawar",
@@ -18,193 +32,515 @@ class _ExecutionState extends State<Execution> {
     "Archana Chauhan",
     "Jay Mathur",
     "Harish Borkar",
-    "Add new",
   ];
 
-  final List<String> roles = [
-    "Team Leader",
-    "Reviewer",
-    "Team Member",
-    "Service Delivery Head",
-  ];
+  // Role assignments - multiple selections allowed
+  List<String> selectedTeamLeaders = [];
+  List<String> selectedReviewers = [];
+  List<String> selectedExecutors = [];
 
-  final List<Employee> selectedEmployees = [];
-  final TextEditingController _projectController = TextEditingController();
-
-  void _showAddEmployeeDialog({String? preSelected}) {
-    String? selectedEmployee = preSelected;
-    String? selectedRole;
-    final TextEditingController nameController = TextEditingController();
-
-    if (preSelected == "Add new") {
-      selectedEmployee = null;
-    } else if (preSelected != null) {
-      selectedEmployee = preSelected;
-    }
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(builder: (context, setStateDialog) {
-          return AlertDialog(
-            title: const Text("Assign Employee"),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (preSelected == "Add new" || preSelected == null)
-                  TextField(
-                    controller: nameController,
-                    decoration:
-                    const InputDecoration(labelText: "Employee Name"),
-                  ),
-                const SizedBox(height: 10),
-                DropdownButtonFormField<String>(
-                  hint: const Text("Select Role"),
-                  items: roles
-                      .map((r) =>
-                      DropdownMenuItem(value: r, child: Text(r)))
-                      .toList(),
-                  onChanged: (value) {
-                    setStateDialog(() => selectedRole = value);
-                  },
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text("Cancel")),
-              ElevatedButton(
-                  onPressed: () {
-                    final name = preSelected == "Add new"
-                        ? nameController.text
-                        : selectedEmployee;
-                    if (name != null &&
-                        name.isNotEmpty &&
-                        selectedRole != null) {
-                      setState(() {
-                        selectedEmployees
-                            .add(Employee(name: name, role: selectedRole!));
-                        if (preSelected == "Add new") {
-                          employees.insert(employees.length - 1, name);
-                        }
-                      });
-                      Navigator.pop(context);
-                    }
-                  },
-                  child: const Text("Add"))
-            ],
-          );
-        });
-      },
-    );
-  }
-
-  void _proceed() {
-    if (_projectController.text.isEmpty || selectedEmployees.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text(
-            "Please add Project title and Team members",
-            textAlign: TextAlign.center,
-          ),
-          backgroundColor: Colors.red.shade200,
-        ),
-      );
-    } else {
-      final project = Project(
-        title: _projectController.text,
-        teamMembers: selectedEmployees,
-        checklist: [],
-      );
-
-      // Navigate to Self Review screen with project data
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => SelfReviewScreen(),
-        ),
-      );
-    }
-  }
+  // Title controller
+  final TextEditingController titleController = TextEditingController();
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey.shade200,
-      body: Center(
-        child: Container(
-          width: 500,
-          padding: const EdgeInsets.all(30),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(15),
-            color: Colors.white,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                "Start Project",
-                style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold),
+      backgroundColor: Colors.grey[100],
+      appBar: AppBar(
+
+        title: Text(
+          'Atlas Copco Quality Review',
+          style: TextStyle(fontWeight: FontWeight.bold , color: Colors.white),
+        ),
+         backgroundColor: Color(0xff1994b7),
+
+        elevation: 0,
+      ),
+      body: SingleChildScrollView(
+        padding: EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header Section
+            Container(
+              width: double.infinity,
+              padding: EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.grey.withOpacity(0.1),
+                    spreadRadius: 1,
+                    blurRadius: 6,
+                    offset: Offset(0, 2),
+                  ),
+                ],
               ),
-              const SizedBox(height: 20),
-              TextField(
-                controller: _projectController,
-                decoration: InputDecoration(
-                  prefixIcon: const Icon(Icons.task),
-                  hintText: "Project Title",
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                  filled: true,
-                  fillColor: Colors.grey.shade200,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextFormField(
+                    controller: titleController,
+                    decoration: InputDecoration(
+                      labelText: 'Project Title',
+                      hintText: 'Enter the project or workflow title',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      prefixIcon: Icon(Icons.title),
+                      contentPadding:
+                      EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                    ),
+                  ),
+                  SizedBox(height: 20),
+                  Text(
+                    'Assign Team Members',
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey[800],
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    'Select multiple team members for each role to begin the workflow process',
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 20),
-              DropdownButtonFormField<String>(
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: Colors.grey.shade200,
-                  labelText: "Select Employee",
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
+            ),
+
+            SizedBox(height: 30),
+
+            // Role Assignment Cards
+            Row(
+              children: [
+                Expanded(
+                  child: _buildMultiSelectRoleCard(
+                    title: 'Team Leaders',
+                    description:
+                    'Oversees the entire process and coordinates team activities',
+                    color: Colors.green,
+                    selectedMembers: selectedTeamLeaders,
+                    onChanged: (selectedList) {
+                      setState(() {
+                        selectedTeamLeaders = selectedList;
+                      });
+                    },
+                    icon: Icons.supervisor_account,
                   ),
                 ),
-                hint: const Text("Choose Employee"),
-                items: employees
-                    .map((e) =>
-                    DropdownMenuItem(value: e, child: Text(e)))
-                    .toList(),
-                onChanged: (value) {
-                  if (value != null) {
-                    _showAddEmployeeDialog(preSelected: value);
-                  }
-                },
+                SizedBox(width: 20),
+                Expanded(
+                  child: _buildMultiSelectRoleCard(
+                    title: 'Reviewers',
+                    description:
+                    'Evaluates work and provides feedback for improvements',
+                    color: Colors.blue,
+                    selectedMembers: selectedReviewers,
+                    onChanged: (selectedList) {
+                      setState(() {
+                        selectedReviewers = selectedList;
+                      });
+                    },
+                    icon: Icons.rate_review,
+                  ),
+                ),
+                SizedBox(width: 20),
+                Expanded(
+                  child: _buildMultiSelectRoleCard(
+                    title: 'Executors',
+                    description:
+                    'Performs tasks and implements required changes',
+                    color: Colors.orange,
+                    selectedMembers: selectedExecutors,
+                    onChanged: (selectedList) {
+                      setState(() {
+                        selectedExecutors = selectedList;
+                      });
+                    },
+                    icon: Icons.engineering,
+                  ),
+                ),
+              ],
+            ),
+
+            SizedBox(height: 40),
+
+            // Assignment Summary
+            Container(
+              width: double.infinity,
+              padding: EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.grey.withOpacity(0.1),
+                    spreadRadius: 1,
+                    blurRadius: 6,
+                    offset: Offset(0, 2),
+                  ),
+                ],
               ),
-              const SizedBox(height: 20),
-              Wrap(
-                runSpacing: 8,
-                spacing: 8,
-                children: selectedEmployees
-                    .map((e) => Chip(
-                  label: Text("${e.name} - ${e.role}"),
-                  deleteIcon: const Icon(Icons.close),
-                  onDeleted: () {
-                    setState(() {
-                      selectedEmployees.remove(e);
-                    });
-                  },
-                ))
-                    .toList(),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Assignment Summary',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey[800],
+                    ),
+                  ),
+                  SizedBox(height: 16),
+                  _buildMultiSummaryRow(
+                      'Team Leaders', selectedTeamLeaders, Colors.green),
+                  SizedBox(height: 12),
+                  _buildMultiSummaryRow(
+                      'Reviewers', selectedReviewers, Colors.blue),
+                  SizedBox(height: 12),
+                  _buildMultiSummaryRow(
+                      'Executors', selectedExecutors, Colors.orange),
+                ],
               ),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: _proceed,
-                child: const Text("Proceed → Self Review"),
-              ),
-            ],
-          ),
+            ),
+
+            SizedBox(height: 30),
+
+            // Action Buttons
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                ElevatedButton(
+                  onPressed: _clearAssignments,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.grey[600],
+                    padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: Text(
+                    'Clear All',
+                    style: TextStyle(fontSize: 16, color: Colors.white),
+                  ),
+                ),
+                SizedBox(width: 16),
+                ElevatedButton(
+                  onPressed: _canStartWorkflow() ? _startWorkflow : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor:
+                    _canStartWorkflow() ? Colors.blue[700] : Colors.grey[400],
+                    padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: Text(
+                    'Start Workflow',
+                    style: TextStyle(fontSize: 16, color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
   }
+
+  Widget _buildMultiSelectRoleCard({
+    required String title,
+    required String description,
+    required Color color,
+    required List<String> selectedMembers,
+    required ValueChanged<List<String>> onChanged,
+    required IconData icon,
+  }) {
+    return Container(
+      padding: EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.3), width: 2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            spreadRadius: 1,
+            blurRadius: 6,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, color: color, size: 24),
+              ),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey[800],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 12),
+          Text(
+            description,
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey[600],
+              height: 1.4,
+            ),
+          ),
+          SizedBox(height: 16),
+
+          // Multi-select interface
+          Container(
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.grey[400]!),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              children: [
+                Container(
+                  padding: EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[50],
+                    borderRadius:
+                    BorderRadius.vertical(top: Radius.circular(8)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.people, size: 16, color: Colors.grey[600]),
+                      SizedBox(width: 8),
+                      Text(
+                        'Selected: ${selectedMembers.length} members',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.grey[700],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  constraints: BoxConstraints(maxHeight: 200),
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: teamMembers.length + 1, // +1 for "Add new"
+                    itemBuilder: (context, index) {
+                      if (index == teamMembers.length) {
+                        return ListTile(
+                          leading: Icon(Icons.add, color: color),
+                          title: Text(
+                            "Add new member",
+                            style: TextStyle(
+                                color: color, fontWeight: FontWeight.w500),
+                          ),
+                          onTap: _showAddMemberDialog,
+                        );
+                      }
+
+                      final member = teamMembers[index];
+                      final isSelected = selectedMembers.contains(member);
+
+                      return CheckboxListTile(
+                        dense: true,
+                        title: Text(
+                          member,
+                          style: TextStyle(fontSize: 14),
+                        ),
+                        value: isSelected,
+                        activeColor: color,
+                        onChanged: (bool? value) {
+                          List<String> updatedList =
+                          List.from(selectedMembers);
+                          if (value == true) {
+                            updatedList.add(member);
+                          } else {
+                            updatedList.remove(member);
+                          }
+                          onChanged(updatedList);
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Display selected members as chips
+          if (selectedMembers.isNotEmpty) ...[
+            SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: selectedMembers.map((member) {
+                return Chip(
+                  label: Text(
+                    member,
+                    style: TextStyle(fontSize: 12),
+                  ),
+                  backgroundColor: color.withOpacity(0.1),
+                  labelStyle: TextStyle(color: color),
+                  deleteIcon: Icon(Icons.close, size: 16, color: color),
+                  onDeleted: () {
+                    List<String> updatedList = List.from(selectedMembers);
+                    updatedList.remove(member);
+                    onChanged(updatedList);
+                  },
+                );
+              }).toList(),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMultiSummaryRow(
+      String role, List<String> assignedMembers, Color color) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 12,
+              height: 12,
+              decoration: BoxDecoration(
+                color: color,
+                shape: BoxShape.circle,
+              ),
+            ),
+            SizedBox(width: 12),
+            Text(
+              '$role (${assignedMembers.length})',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: Colors.grey[700],
+              ),
+            ),
+          ],
+        ),
+        SizedBox(height: 4),
+        Padding(
+          padding: EdgeInsets.only(left: 24),
+          child: Text(
+            assignedMembers.isEmpty
+                ? 'No members assigned'
+                : assignedMembers.join(', '),
+            style: TextStyle(
+              fontSize: 14,
+              color: assignedMembers.isNotEmpty
+                  ? Colors.grey[600]
+                  : Colors.grey[500],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  bool _canStartWorkflow() {
+    return selectedTeamLeaders.isNotEmpty &&
+        selectedReviewers.isNotEmpty &&
+        selectedExecutors.isNotEmpty;
+  }
+
+  void _clearAssignments() {
+    setState(() {
+      selectedTeamLeaders.clear();
+      selectedReviewers.clear();
+      selectedExecutors.clear();
+      titleController.clear();
+    });
+  }
+
+  void _startWorkflow() {
+    if (_canStartWorkflow()) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => DynamicQuestionsAssigning(
+            question: "Is imported geometry correct (units/required data)?",
+            assignedMembers: {
+              "leaders": selectedTeamLeaders,
+              "reviewers": selectedReviewers,
+              "executors": selectedExecutors,
+              "title": titleController.text.isNotEmpty
+                  ? titleController.text
+                  : "Untitled Project",
+            },
+          ),
+        ),
+      );
+    }
+  }
+
+
+  void _showAddMemberDialog() {
+    final TextEditingController nameController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text("Add New Member"),
+          content: TextField(
+            controller: nameController,
+            decoration: InputDecoration(
+              hintText: "Enter member name",
+              border: OutlineInputBorder(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+              },
+              child: Text("Cancel"),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final newName = nameController.text.trim();
+                if (newName.isNotEmpty && !teamMembers.contains(newName)) {
+                  setState(() {
+                    teamMembers.add(newName);
+                  });
+                }
+                Navigator.pop(context);
+              },
+              child: Text("Add"),
+            ),
+          ],
+        );
+      },
+    );
+  }
 }
+
