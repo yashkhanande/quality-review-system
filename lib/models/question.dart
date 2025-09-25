@@ -1,27 +1,6 @@
 class Question {
-  final String category;
-  final String text;
-  String? answer;
-  List<Question> subQuestions; // Nested sub-questions
+  final String mainQuestion;
+  final List<String> subQuestions;
 
-  Question({
-    required this.category,
-    required this.text,
-    this.answer,
-    this.subQuestions = const [],
-  });
-
-  Question copyWith({
-    String? category,
-    String? text,
-    String? answer,
-    List<Question>? subQuestions,
-  }) {
-    return Question(
-      category: category ?? this.category,
-      text: text ?? this.text,
-      answer: answer ?? this.answer,
-      subQuestions: subQuestions ?? this.subQuestions,
-    );
-  }
+  Question({required this.mainQuestion, required this.subQuestions});
 }

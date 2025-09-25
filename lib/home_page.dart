@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
-import 'screens/dynamic_questions_assigning.dart';
+import 'screens/questions_sceen.dart'; // make sure this exists in lib/screens/
 
 class HomePage extends StatefulWidget {
+  const HomePage({super.key});
+
   @override
-  _HomePageState createState() => _HomePageState();
+  State<HomePage> createState() => _HomePageState();
 }
 
 class _HomePageState extends State<HomePage> {
-  // initial team members
-  final List<String> teamMembers = [
+  // mutable so we can add new members
+  List<String> teamMembers = [
     "Suraj Bansal",
     "Akash Kathe",
     "Suresh Pawar",
@@ -18,224 +20,240 @@ class _HomePageState extends State<HomePage> {
     "Harish Borkar",
   ];
 
-  // multiple selections
   List<String> selectedTeamLeaders = [];
   List<String> selectedReviewers = [];
-  List<String> selectedExecutors = [];
 
   final TextEditingController titleController = TextEditingController();
-
-  @override
-  void dispose() {
-    titleController.dispose();
-    super.dispose();
-  }
+  final TextEditingController descriptionController = TextEditingController();
 
   bool _canStartWorkflow() =>
-      selectedTeamLeaders.isNotEmpty &&
-          selectedReviewers.isNotEmpty &&
-          selectedExecutors.isNotEmpty;
+      selectedTeamLeaders.isNotEmpty && selectedReviewers.isNotEmpty;
 
   void _clearAssignments() {
     setState(() {
       selectedTeamLeaders.clear();
       selectedReviewers.clear();
-      selectedExecutors.clear();
       titleController.clear();
     });
   }
 
   void _startWorkflow() {
     if (!_canStartWorkflow()) return;
+
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => DynamicQuestionsAssigning(
-          assignedMembers: {
-            "leaders": selectedTeamLeaders,
-            "reviewers": selectedReviewers,
-            "executors": selectedExecutors,
-            "title": titleController.text.isNotEmpty
-                ? titleController.text
-                : "Untitled Project",
-          },
+        builder: (context) => QuestionsScreen(
+          projectTitle: titleController.text.isNotEmpty
+              ? titleController.text
+              : "Untitled Project",
+          leaders: selectedTeamLeaders,
+          reviewers: selectedReviewers,
+          executors: [], // not needed, but kept for compatibility
         ),
       ),
     );
-
   }
 
-  BoxDecoration _cardDecoration() => BoxDecoration(
-    color: Colors.white,
-    borderRadius: BorderRadius.circular(12),
-    boxShadow: [
-      BoxShadow(
-          color: Colors.grey.withOpacity(0.1),
-          spreadRadius: 1,
-          blurRadius: 6,
-          offset: const Offset(0, 2)),
-    ],
-  );
+  void _showAddMemberDialog() {
 
-  Widget _buildRoleCard({
-    required String title,
-    required Color color,
-    required List<String> selectedMembers,
-    required ValueChanged<List<String>> onChanged,
-    required IconData icon,
-  }) {
+    final TextEditingController nameController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text("Add New Member"),
+          content: TextField(
+            controller: nameController,
+            decoration: const InputDecoration(hintText: "Enter member name"),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text("Cancel"),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final newName = nameController.text.trim();
+                if (newName.isNotEmpty && !teamMembers.contains(newName)) {
+                  setState(() => teamMembers.add(newName));
+                }
+                Navigator.pop(ctx);
+              },
+              child: const Text("Add"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildRoleSection(
+      String title,
+      Color color,
+      List<String> selectedMembers,
+      ValueChanged<List<String>> onChanged,
+      ) {
     return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: _cardDecoration(),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: color.withOpacity(0.4)),
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [
-            Icon(icon, color: color),
-            const SizedBox(width: 8),
-            Text(title,
-                style: TextStyle(
-                    fontSize: 18, fontWeight: FontWeight.bold, color: color)),
-          ]),
-          const SizedBox(height: 12),
-          ...teamMembers.map((m) {
-            final isSelected = selectedMembers.contains(m);
+          Text(title,
+              style: TextStyle(
+                  fontSize: 18, fontWeight: FontWeight.bold, color: color)),
+          const SizedBox(height: 10),
+
+          // member checkboxes
+          ...teamMembers.map((member) {
+            final isSelected = selectedMembers.contains(member);
             return CheckboxListTile(
               value: isSelected,
-              title: Text(m),
+              title: Text(member),
               activeColor: color,
               onChanged: (v) {
-                final list = List<String>.from(selectedMembers);
+                final updated = List<String>.from(selectedMembers);
                 if (v == true) {
-                  if (!list.contains(m)) list.add(m);
+                  updated.add(member);
                 } else {
-                  list.remove(m);
+                  updated.remove(member);
                 }
-                onChanged(list);
+                onChanged(updated);
               },
             );
-          }).toList(),
+          }),
+
+          // add new member row
+          ListTile(
+            leading: Icon(Icons.add, color: color),
+            title: Text("Add new member",
+                style: TextStyle(
+                    color: color, fontWeight: FontWeight.w600)),
+            onTap: _showAddMemberDialog,
+          ),
+
+          // chips for selected members
+          if (selectedMembers.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: selectedMembers.map((member) {
+                return Chip(
+                  label: Text(member, style: const TextStyle(fontSize: 12)),
+                  backgroundColor: color.withOpacity(0.15),
+                  labelStyle: TextStyle(color: color),
+                  deleteIcon: Icon(Icons.close, size: 16, color: color),
+                  onDeleted: () {
+                    final updated = List<String>.from(selectedMembers);
+                    updated.remove(member);
+                    onChanged(updated);
+                  },
+                );
+              }).toList(),
+            ),
+          ]
         ],
       ),
     );
   }
 
-  Widget _buildSummaryRow(String role, List<String> members, Color color) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(children: [
-        CircleAvatar(radius: 6, backgroundColor: color),
-        const SizedBox(width: 8),
-        Expanded(
-            child: Text("$role: ${members.isEmpty ? 'None' : members.join(', ')}")),
-      ]),
-    );
+  @override
+  void dispose() {
+    descriptionController.dispose();
+    titleController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[100],
       appBar: AppBar(
-        title: const Text(
-          'Atlas Copco Quality Review',
-          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
-        ),
+        title: const Text("Atlas Copco Quality Review",style: TextStyle(
+          fontWeight: FontWeight.bold,
+          color: Colors.white
+        ),),
         backgroundColor: const Color(0xff1994b7),
-        elevation: 0,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: _cardDecoration(),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              TextFormField(
-                controller: titleController,
-                decoration: InputDecoration(
-                  labelText: 'Project Title',
-                  hintText: 'Enter the project or workflow title',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                  prefixIcon: const Icon(Icons.title),
+        child: Column(
+          children: [
+            // Project title
+            TextFormField(
+              controller: titleController,
+              decoration: InputDecoration(
+                labelText: "Project Title",
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
                 ),
               ),
-              const SizedBox(height: 20),
-              const Text('Assign Team Members',
-                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              const Text(
-                'Select multiple team members for each role to begin the workflow process',
-                style: TextStyle(fontSize: 16, color: Colors.grey),
-              ),
-            ]),
-          ),
-          const SizedBox(height: 30),
-          Row(
-            children: [
-              Expanded(
-                child: _buildRoleCard(
-                  title: 'Team Leaders',
-                  color: Colors.green,
-                  selectedMembers: selectedTeamLeaders,
-                  onChanged: (list) => setState(() => selectedTeamLeaders = list),
-                  icon: Icons.supervisor_account,
+            ),
+            const SizedBox(height: 20),
+            TextFormField(
+              controller:  descriptionController,
+              decoration: InputDecoration(
+                labelText: "Descriptions",
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
                 ),
               ),
-              const SizedBox(width: 20),
-              Expanded(
-                child: _buildRoleCard(
-                  title: 'Reviewers',
-                  color: Colors.blue,
-                  selectedMembers: selectedReviewers,
-                  onChanged: (list) => setState(() => selectedReviewers = list),
-                  icon: Icons.rate_review,
+            ),
+            const SizedBox(height: 20),
+
+            // Row with 2 role cards
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: _buildRoleSection(
+                    "Team Leaders",
+                    Colors.green,
+                    selectedTeamLeaders,
+                        (list) => setState(() => selectedTeamLeaders = list),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 20),
-              Expanded(
-                child: _buildRoleCard(
-                  title: 'Executors',
-                  color: Colors.orange,
-                  selectedMembers: selectedExecutors,
-                  onChanged: (list) => setState(() => selectedExecutors = list),
-                  icon: Icons.engineering,
+                const SizedBox(width: 20),
+                Expanded(
+                  child: _buildRoleSection(
+                    "Reviewers",
+                    Colors.blue,
+                    selectedReviewers,
+                        (list) => setState(() => selectedReviewers = list),
+                  ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 40),
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: _cardDecoration(),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('Assignment Summary',
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 16),
-              _buildSummaryRow('Team Leaders', selectedTeamLeaders, Colors.green),
-              _buildSummaryRow('Reviewers', selectedReviewers, Colors.blue),
-              _buildSummaryRow('Executors', selectedExecutors, Colors.orange),
-            ]),
-          ),
-          const SizedBox(height: 30),
-          Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+              ],
+            ),
+          ],
+        ),
+      ),
+      bottomNavigationBar: Padding(
+        padding: const EdgeInsets.all(8.0),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
             ElevatedButton(
               onPressed: _clearAssignments,
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.grey[600]),
-              child: const Text('Clear All',style: TextStyle(
-                color: Colors.white
-              ),),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.grey),
+              child: const Text("Clear All"),
             ),
             const SizedBox(width: 16),
             ElevatedButton(
               onPressed: _canStartWorkflow() ? _startWorkflow : null,
               style: ElevatedButton.styleFrom(
-                backgroundColor: _canStartWorkflow() ? Colors.white : Colors.black,
+                backgroundColor:
+                _canStartWorkflow() ? Colors.blue : Colors.grey,
               ),
-              child: const Text('Start Workflow',style: TextStyle(color :Colors.black),),
+              child: const Text("Start Workflow"),
             ),
-          ]),
-        ]),
+          ],
+        ),
       ),
     );
   }

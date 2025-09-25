@@ -1,5 +1,5 @@
+import 'package:atlas_copco/screens/questions_sceen.dart';
 import 'package:flutter/material.dart';
-
 import 'dynamic_questions_assigning.dart';
 
 class TeamRoleAssignmentApp extends StatelessWidget {
@@ -483,22 +483,23 @@ class _HomePageState extends State<HomePage> {
 
   void _startWorkflow() {
     if (_canStartWorkflow()) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => DynamicQuestionsAssigning(
-            question: "Is imported geometry correct (units/required data)?",
-            assignedMembers: {
-              "leaders": selectedTeamLeaders,
-              "reviewers": selectedReviewers,
-              "executors": selectedExecutors,
-              "title": titleController.text.isNotEmpty
-                  ? titleController.text
-                  : "Untitled Project",
-            },
-          ),
-        ),
-      );
+      // Navigator.push(
+      //   context,
+      //   MaterialPageRoute(
+      //     builder: (context) => DynamicQuestionsAssigning(
+      //       question: "Is imported geometry correct (units/required data)?",
+      //       assignedMembers: {
+      //         "leaders": selectedTeamLeaders,
+      //         "reviewers": selectedReviewers,
+      //         "executors": selectedExecutors,
+      //         "title": titleController.text.isNotEmpty
+      //             ? titleController.text
+      //             : "Untitled Project",
+      //       },
+      //     ),
+      //   ),
+      // );
+      Navigator.push(context, MaterialPageRoute(builder: (context)=>Questions()));
     }
   }
 
