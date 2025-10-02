@@ -1,4 +1,8 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:typed_data';
+
 
 // --- Data Model ---
 class Question {
@@ -285,41 +289,43 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text("Checklist - ${widget.projectTitle}")),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(12),
-        itemCount: checklist.length,
-        itemBuilder: (context, index) {
-          final question = checklist[index];
-          return Card(
-            margin: const EdgeInsets.symmetric(vertical: 8),
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    question.mainQuestion,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
+      body: SafeArea(
+        child: ListView.builder(
+          padding: const EdgeInsets.all(12),
+          itemCount: checklist.length,
+          itemBuilder: (context, index) {
+            final question = checklist[index];
+            return Card(
+              margin: const EdgeInsets.symmetric(vertical: 8),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      question.mainQuestion,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 10),
-                  ...question.subQuestions.map((subQ) {
-                    return SubQuestionCard(
-                      subQuestion: subQ,
-                      onAnswer: (ans) {
-                        setState(() {
-                          answers[subQ] = ans;
-                        });
-                      },
-                    );
-                  }),
-                ],
+                    const SizedBox(height: 10),
+                    ...question.subQuestions.map((subQ) {
+                      return SubQuestionCard(
+                        subQuestion: subQ,
+                        onAnswer: (ans) {
+                          setState(() {
+                            answers[subQ] = ans;
+                          });
+                        },
+                      );
+                    }),
+                  ],
+                ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
       bottomNavigationBar: Padding(
         padding: const EdgeInsets.all(12),
@@ -329,6 +335,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
             backgroundColor: Colors.green,
             padding: const EdgeInsets.all(16),
           ),
+
           child: const Text(
             "Submit Checklist",
             style: TextStyle(fontSize: 18, color: Colors.white),
@@ -361,7 +368,31 @@ class SubQuestionCard extends StatefulWidget {
 
 class _SubQuestionCardState extends State<SubQuestionCard> {
   String? selectedOption;
+  File? selectedImage;
   final TextEditingController remarkController = TextEditingController();
+  Uint8List? _imageBytes;
+
+  void _updateAnswer() {
+    widget.onAnswer({
+      "answer": selectedOption,
+      "remark": remarkController.text,
+      "image": _imageBytes,
+    });
+  }
+  Future<void> _pickImage() async {
+    final XFile? returnedImage =
+    await ImagePicker().pickImage(source: ImageSource.gallery);
+
+    if (returnedImage != null) {
+      final bytes = await returnedImage.readAsBytes();
+      setState(() {
+        _imageBytes = bytes;
+      });
+      _updateAnswer();
+
+    }
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -375,7 +406,7 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
           groupValue: selectedOption,
           onChanged: (val) {
             setState(() => selectedOption = val);
-            widget.onAnswer({"answer": val, "remark": remarkController.text});
+            _updateAnswer();
           },
         ),
         RadioListTile<String>(
@@ -384,22 +415,36 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
           groupValue: selectedOption,
           onChanged: (val) {
             setState(() => selectedOption = val);
-            widget.onAnswer({"answer": val, "remark": remarkController.text});
+            _updateAnswer();
           },
         ),
-        TextField(
-          controller: remarkController,
-          onChanged: (val) {
-            widget.onAnswer({"answer": selectedOption, "remark": val});
-          },
-          decoration: InputDecoration(
-            filled: true,
-            fillColor: Colors.grey.shade100,
-            hintText: "Remark",
-            border: const OutlineInputBorder(borderSide: BorderSide.none),
+        Container(
+          width: MediaQuery.of(context).size.width,
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: remarkController,
+                  onChanged: (val) {
+                    _updateAnswer();
+                  },
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: Colors.grey.shade100,
+                    hintText: "Remark",
+                    border: const OutlineInputBorder(borderSide: BorderSide.none),
+                  ),
+                ),
+              ),
+              IconButton(onPressed: (
+                  ){
+                _pickImage();
+              }, icon: Icon(Icons.add_a_photo_outlined))
+            ],
           ),
         ),
         const SizedBox(height: 12),
+        _imageBytes != null ? Image.memory(_imageBytes! ,width: 400,) : Text('Select Image')
       ],
     );
   }

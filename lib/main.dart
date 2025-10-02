@@ -18,3 +18,8 @@ class TeamRoleAssignmentApp extends StatelessWidget {
     );
   }
 }
+
+// git status
+// git add .
+// git commit -m "updated"
+// git push origin main
