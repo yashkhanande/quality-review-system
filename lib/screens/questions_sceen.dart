@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:typed_data';
 
-
 // --- Data Model ---
 class Question {
   final String mainQuestion;
@@ -34,7 +33,6 @@ class QuestionsScreen extends StatefulWidget {
 class _QuestionsScreenState extends State<QuestionsScreen> {
   final Map<String, Map<String, dynamic>> answers = {};
 
-  // 🔥 make checklist mutable
   final List<Question> checklist = [
     Question(
       mainQuestion: "Verification",
@@ -191,13 +189,16 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
     debugPrint("Checklist Submitted: $result");
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Checklist submitted successfully!",style: TextStyle(
-        fontWeight: FontWeight.bold
-      ),)),
+      const SnackBar(
+        content: Text(
+          "Checklist submitted successfully!",
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        backgroundColor: Colors.green,
+      ),
     );
   }
 
-  // 🔥 Function to add custom question
   void _addQuestionDialog() {
     final TextEditingController mainQController = TextEditingController();
     final TextEditingController subQController = TextEditingController();
@@ -288,15 +289,25 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text("Checklist - ${widget.projectTitle}")),
+      appBar: AppBar(
+        title: Text(
+          "Checklist - ${widget.projectTitle}",
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w400),
+        ),
+        backgroundColor: Colors.blue,
+      ),
       body: SafeArea(
         child: ListView.builder(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(20),
           itemCount: checklist.length,
           itemBuilder: (context, index) {
             final question = checklist[index];
             return Card(
-              margin: const EdgeInsets.symmetric(vertical: 8),
+              shape: RoundedRectangleBorder(
+                side: BorderSide(color: Colors.blue),
+                borderRadius: BorderRadiusGeometry.circular(10),
+              ),
+              margin: const EdgeInsets.symmetric(vertical: 10),
               child: Padding(
                 padding: const EdgeInsets.all(12),
                 child: Column(
@@ -332,7 +343,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
         child: ElevatedButton(
           onPressed: _submitChecklist,
           style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.green,
+            backgroundColor: Colors.blue,
             padding: const EdgeInsets.all(16),
           ),
 
@@ -345,7 +356,7 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
       floatingActionButton: FloatingActionButton(
         onPressed: _addQuestionDialog,
         backgroundColor: Colors.blue,
-        child: const Icon(Icons.add),
+        child: const Icon(Icons.add, color: Colors.white),
       ),
     );
   }
@@ -379,9 +390,11 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
       "image": _imageBytes,
     });
   }
+
   Future<void> _pickImage() async {
-    final XFile? returnedImage =
-    await ImagePicker().pickImage(source: ImageSource.gallery);
+    final XFile? returnedImage = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+    );
 
     if (returnedImage != null) {
       final bytes = await returnedImage.readAsBytes();
@@ -389,10 +402,8 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
         _imageBytes = bytes;
       });
       _updateAnswer();
-
     }
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -432,19 +443,23 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
                     filled: true,
                     fillColor: Colors.grey.shade100,
                     hintText: "Remark",
-                    border: const OutlineInputBorder(borderSide: BorderSide.none),
+                    border: const OutlineInputBorder(
+                      borderSide: BorderSide.none,
+                    ),
                   ),
                 ),
               ),
-              IconButton(onPressed: (
-                  ){
-                _pickImage();
-              }, icon: Icon(Icons.add_a_photo_outlined))
+              IconButton(
+                onPressed: () {
+                  _pickImage();
+                },
+                icon: Icon(Icons.add_a_photo_outlined, color: Colors.black),
+              ),
             ],
           ),
         ),
         const SizedBox(height: 12),
-        _imageBytes != null ? Image.memory(_imageBytes! ,width: 400,) : Text('Select Image')
+        if (_imageBytes != null) Image.memory(_imageBytes!, width: 400),
       ],
     );
   }

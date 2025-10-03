@@ -56,7 +56,6 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _showAddMemberDialog() {
-
     final TextEditingController nameController = TextEditingController();
 
     showDialog(
@@ -90,11 +89,11 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildRoleSection(
-      String title,
-      Color color,
-      List<String> selectedMembers,
-      ValueChanged<List<String>> onChanged,
-      ) {
+    String title,
+    Color color,
+    List<String> selectedMembers,
+    ValueChanged<List<String>> onChanged,
+  ) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -105,9 +104,14 @@ class _HomePageState extends State<HomePage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title,
-              style: TextStyle(
-                  fontSize: 18, fontWeight: FontWeight.bold, color: color)),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
           const SizedBox(height: 10),
 
           // member checkboxes
@@ -132,9 +136,10 @@ class _HomePageState extends State<HomePage> {
           // add new member row
           ListTile(
             leading: Icon(Icons.add, color: color),
-            title: Text("Add new member",
-                style: TextStyle(
-                    color: color, fontWeight: FontWeight.w600)),
+            title: Text(
+              "Add new member",
+              style: TextStyle(color: color, fontWeight: FontWeight.w600),
+            ),
             onTap: _showAddMemberDialog,
           ),
 
@@ -158,7 +163,7 @@ class _HomePageState extends State<HomePage> {
                 );
               }).toList(),
             ),
-          ]
+          ],
         ],
       ),
     );
@@ -175,11 +180,11 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Atlas Copco Quality Review",style: TextStyle(
-          fontWeight: FontWeight.bold,
-          color: Colors.white
-        ),),
-        backgroundColor: const Color(0xff1994b7),
+        title: const Text(
+          "Atlas Copco Quality Review",
+          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+        ),
+        backgroundColor: Colors.blue,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
@@ -197,7 +202,7 @@ class _HomePageState extends State<HomePage> {
             ),
             const SizedBox(height: 20),
             TextFormField(
-              controller:  descriptionController,
+              controller: descriptionController,
               decoration: InputDecoration(
                 labelText: "Descriptions",
                 border: OutlineInputBorder(
@@ -214,9 +219,9 @@ class _HomePageState extends State<HomePage> {
                 Expanded(
                   child: _buildRoleSection(
                     "Team Leaders",
-                    Colors.green,
+                    Colors.blue,
                     selectedTeamLeaders,
-                        (list) => setState(() => selectedTeamLeaders = list),
+                    (list) => setState(() => selectedTeamLeaders = list),
                   ),
                 ),
                 const SizedBox(width: 20),
@@ -225,7 +230,7 @@ class _HomePageState extends State<HomePage> {
                     "Reviewers",
                     Colors.blue,
                     selectedReviewers,
-                        (list) => setState(() => selectedReviewers = list),
+                    (list) => setState(() => selectedReviewers = list),
                   ),
                 ),
               ],
@@ -240,17 +245,26 @@ class _HomePageState extends State<HomePage> {
           children: [
             ElevatedButton(
               onPressed: _clearAssignments,
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.grey),
-              child: const Text("Clear All"),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
+              child: const Text(
+                "Clear All",
+                style: TextStyle(color: Colors.white),
+              ),
             ),
             const SizedBox(width: 16),
             ElevatedButton(
               onPressed: _canStartWorkflow() ? _startWorkflow : null,
               style: ElevatedButton.styleFrom(
-                backgroundColor:
-                _canStartWorkflow() ? Colors.blue : Colors.grey,
+                backgroundColor: _canStartWorkflow()
+                    ? Colors.blue
+                    : Colors.grey,
               ),
-              child: const Text("Start Workflow"),
+              child: Text(
+                "Start Workflow",
+                style: TextStyle(
+                  color: _canStartWorkflow() ? Colors.white : Colors.black,
+                ),
+              ),
             ),
           ],
         ),

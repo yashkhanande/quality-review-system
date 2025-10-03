@@ -1,5 +1,5 @@
+import 'package:atlas_copco/login.dart';
 import 'package:flutter/material.dart';
-import 'home_page.dart';
 
 void main() {
   runApp(const TeamRoleAssignmentApp());
@@ -13,7 +13,7 @@ class TeamRoleAssignmentApp extends StatelessWidget {
     return MaterialApp(
       title: 'Atlas Copco Quality Review',
       theme: ThemeData(primarySwatch: Colors.blue),
-      home: const HomePage(),
+      home: const login(),
       debugShowCheckedModeBanner: false,
     );
   }
