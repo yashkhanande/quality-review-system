@@ -1,6 +1,4 @@
-import 'package:flutter/material.dart';
-
-/// A single checklist item (can also contain nested sub-items).
+// A single checklist item (can also contain nested sub-items).
 class ChecklistItem {
   final String description;
   final String type; // "yesno", "text", "number", "group"
