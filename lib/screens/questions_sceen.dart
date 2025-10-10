@@ -1,7 +1,28 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
+import '../data/services/upload_service.dart';
+import '../data/services/checklist_service.dart';
 import 'dart:typed_data';
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter_dropzone/flutter_dropzone.dart';
+import 'dart:async';
+import 'package:flutter/foundation.dart';
+import '../utils/paste_helper.dart';
+import 'package:dio/dio.dart';
+
+// Upload state types for per-image progress tracking
+enum UploadStatus { pending, uploading, success, failed }
+
+class ImageUploadState {
+  UploadStatus status;
+  double progress; // 0.0..1.0
+  CancelToken? cancelToken;
+
+  ImageUploadState({
+    this.status = UploadStatus.pending,
+    this.progress = 0.0,
+    this.cancelToken,
+  });
+}
 
 // --- Data Model ---
 class Question {
@@ -32,6 +53,8 @@ class QuestionsScreen extends StatefulWidget {
 
 class _QuestionsScreenState extends State<QuestionsScreen> {
   final Map<String, Map<String, dynamic>> answers = {};
+  // track per-subquestion upload states
+  final Map<String, List<ImageUploadState>> uploadStates = {};
 
   final List<Question> checklist = [
     Question(
@@ -178,25 +201,91 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
   ];
 
   void _submitChecklist() {
-    final result = {
+    _uploadAndSubmit();
+  }
+
+  Future<void> _uploadAndSubmit() async {
+    final uploadService = UploadService();
+    final checklistService = ChecklistService();
+
+    // Copy answers and replace image bytes with uploaded URLs
+    final Map<String, dynamic> payload = {
       "projectTitle": widget.projectTitle,
       "leaders": widget.leaders,
       "reviewers": widget.reviewers,
       "executors": widget.executors,
-      "answers": answers,
+      "answers": {},
     };
 
-    debugPrint("Checklist Submitted: $result");
+    for (final entry in answers.entries) {
+      final key = entry.key;
+      final map = Map<String, dynamic>.from(entry.value);
+      if (map.containsKey('images') && map['images'] is List) {
+        final List<dynamic> images = map['images'];
+        final List<String> urls = [];
+        uploadStates[key] = List.generate(
+          images.length,
+          (i) => ImageUploadState(),
+        );
+        int idx = 0;
+        for (final imgEntry in images) {
+          if (imgEntry is Map && imgEntry['bytes'] is Uint8List) {
+            final bytes = imgEntry['bytes'] as Uint8List;
+            final srcName = imgEntry['name'] as String?;
+            final filename =
+                srcName ??
+                'upload_${DateTime.now().millisecondsSinceEpoch}_$idx.png';
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          "Checklist submitted successfully!",
-          style: TextStyle(fontWeight: FontWeight.bold),
+            final cancelToken = CancelToken();
+            try {
+              final url = await uploadService.uploadBytesWithProgress(
+                bytes,
+                filename,
+                (sent, total) {
+                  setState(() {
+                    uploadStates[key]![idx].progress = total > 0
+                        ? sent / total
+                        : 0.0;
+                  });
+                },
+                cancelToken: cancelToken,
+              );
+              urls.add(url);
+              setState(() {
+                uploadStates[key]![idx].status = UploadStatus.success;
+              });
+            } catch (e) {
+              debugPrint('upload failed: $e');
+              setState(() {
+                uploadStates[key]![idx].status = UploadStatus.failed;
+              });
+            }
+          }
+          idx++;
+        }
+        map['images'] = urls;
+      }
+      payload['answers'][key] = map;
+    }
+
+    try {
+      final resp = await checklistService.submitChecklist(payload);
+      debugPrint('Checklist submit response: ${resp.statusCode} ${resp.data}');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            "Checklist submitted successfully!",
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          backgroundColor: Colors.green,
         ),
-        backgroundColor: Colors.green,
-      ),
-    );
+      );
+    } catch (e) {
+      debugPrint('Checklist submission failed: $e');
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Submit failed: $e')));
+    }
   }
 
   void _addQuestionDialog() {
@@ -379,31 +468,41 @@ class SubQuestionCard extends StatefulWidget {
 
 class _SubQuestionCardState extends State<SubQuestionCard> {
   String? selectedOption;
-  File? selectedImage;
   final TextEditingController remarkController = TextEditingController();
-  Uint8List? _imageBytes;
-
+  // Each image is stored as a map: { 'bytes': Uint8List, 'name': String? }
+  List<Map<String, dynamic>> _images = [];
   void _updateAnswer() {
     widget.onAnswer({
       "answer": selectedOption,
       "remark": remarkController.text,
-      "image": _imageBytes,
+      "images": _images,
     });
   }
 
-  Future<void> _pickImage() async {
-    final XFile? returnedImage = await ImagePicker().pickImage(
-      source: ImageSource.gallery,
-    );
-
-    if (returnedImage != null) {
-      final bytes = await returnedImage.readAsBytes();
-      setState(() {
-        _imageBytes = bytes;
-      });
-      _updateAnswer();
+  Future<void> _pickImages() async {
+    try {
+      // Use FilePicker to allow multi-selection on desktop/mobile
+      final result = await FilePicker.platform.pickFiles(
+        allowMultiple: true,
+        type: FileType.image,
+      );
+      if (result != null && result.files.isNotEmpty) {
+        setState(() {
+          _images = result.files
+              .where((f) => f.bytes != null)
+              .map((f) => {'bytes': f.bytes!, 'name': f.name})
+              .toList();
+        });
+        _updateAnswer();
+      }
+    } catch (e) {
+      debugPrint('pick images error: $e');
     }
   }
+
+  late DropzoneViewController _dropCtrl;
+
+  // For web/desktop: paste handler could be added later using RawKeyboard/Clipboard APIs
 
   @override
   Widget build(BuildContext context) {
@@ -429,7 +528,7 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
             _updateAnswer();
           },
         ),
-        Container(
+        SizedBox(
           width: MediaQuery.of(context).size.width,
           child: Row(
             children: [
@@ -451,15 +550,173 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
               ),
               IconButton(
                 onPressed: () {
-                  _pickImage();
+                  _pickImages();
                 },
-                icon: Icon(Icons.add_a_photo_outlined, color: Colors.black),
+                icon: const Icon(
+                  Icons.add_a_photo_outlined,
+                  color: Colors.black,
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Dropzone area small button to toggle drop support preview
+              ElevatedButton(
+                onPressed: () async {
+                  // open a dialog with a larger drop area on web
+                  if (Theme.of(context).platform == TargetPlatform.android ||
+                      Theme.of(context).platform == TargetPlatform.iOS) {
+                    _pickImages();
+                    return;
+                  }
+                  await showDialog(
+                    context: context,
+                    builder: (ctx) {
+                      PasteSubscription? pasteSub;
+                      if (kIsWeb) {
+                        pasteSub = addPasteListener((bytes) {
+                          setState(
+                            () => _images.add({'bytes': bytes, 'name': null}),
+                          );
+                          _updateAnswer();
+                        });
+                      }
+
+                      return AlertDialog(
+                        title: const Text(
+                          'Drop images here or click to pick (paste with Ctrl/Cmd+V)',
+                        ),
+                        content: SizedBox(
+                          width: 600,
+                          height: 300,
+                          child: DropzoneView(
+                            onCreated: (c) => _dropCtrl = c,
+                            onLoaded: () => debugPrint('dropzone loaded'),
+                            onError: (e) => debugPrint('dropzone error: $e'),
+                            onDrop: (ev) async {
+                              try {
+                                final bytes = await _dropCtrl.getFileData(ev);
+                                String? name;
+                                try {
+                                  name = await _dropCtrl.getFilename(ev);
+                                } catch (_) {
+                                  name = null;
+                                }
+                                setState(
+                                  () => _images.add({
+                                    'bytes': Uint8List.fromList(bytes),
+                                    'name': name,
+                                  }),
+                                );
+                                _updateAnswer();
+                              } catch (e) {
+                                debugPrint('drop processing error: $e');
+                              }
+                            },
+                          ),
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () {
+                              pasteSub?.cancel();
+                              Navigator.pop(ctx);
+                            },
+                            child: const Text('Close'),
+                          ),
+                          ElevatedButton(
+                            onPressed: () async {
+                              pasteSub?.cancel();
+                              await _pickImages();
+                              Navigator.pop(ctx);
+                            },
+                            child: const Text('Pick files'),
+                          ),
+                        ],
+                      );
+                    },
+                  );
+                },
+                child: const Text('Drop/Paste'),
               ),
             ],
           ),
         ),
         const SizedBox(height: 12),
-        if (_imageBytes != null) Image.memory(_imageBytes!, width: 400),
+        if (_images.isNotEmpty)
+          SizedBox(
+            height: 120,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: _images.length,
+              itemBuilder: (context, i) {
+                final img = _images[i];
+                final bytes = img['bytes'] as Uint8List;
+                final name = img['name'] as String?;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8.0),
+                  child: Stack(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: Image.memory(
+                          bytes,
+                          width: 120,
+                          height: 120,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                      Positioned(
+                        top: 4,
+                        right: 4,
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _images.removeAt(i);
+                            });
+                            _updateAnswer();
+                          },
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.black54,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Padding(
+                              padding: EdgeInsets.all(4.0),
+                              child: Icon(
+                                Icons.close,
+                                size: 16,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      if (name != null)
+                        Positioned(
+                          left: 4,
+                          bottom: 4,
+                          right: 4,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 4,
+                              vertical: 2,
+                            ),
+                            color: Colors.black45,
+                            child: Text(
+                              name,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
       ],
     );
   }
