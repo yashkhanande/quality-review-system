@@ -1,5 +1,5 @@
-import 'package:atlas_copco/login.dart';
 import 'package:flutter/material.dart';
+import 'login.dart';
 
 void main() {
   runApp(const TeamRoleAssignmentApp());
@@ -10,16 +10,10 @@ class TeamRoleAssignmentApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return const MaterialApp(
       title: 'Atlas Copco Quality Review',
-      theme: ThemeData(primarySwatch: Colors.blue),
-      home: const login(),
+      home: login(),
       debugShowCheckedModeBanner: false,
     );
   }
 }
-
-// git status
-// git add .
-// git commit -m "updated"
-// git push origin main
