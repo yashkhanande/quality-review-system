@@ -15,6 +15,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   final _apiClient = ApiClient().dio;
   bool _loading = false;
   List<Map<String, dynamic>> _employees = [];
+  String? _lastError; // store last error to show inline
 
   @override
   void initState() {
@@ -22,76 +23,125 @@ class _AdminDashboardState extends State<AdminDashboard> {
     _loadEmployees();
   }
 
+  /// Fetch employees from backend with verbose error handling and logging
   Future<void> _loadEmployees() async {
     if (!mounted) return;
 
-    try {
-      setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _lastError = null;
+    });
 
-      final resp = await _apiClient.get('/users');
+    try {
+      // build request options: include token from Env if present
+      final headers = <String, String>{};
+
+      // Print for debugging
+      print('AdminDashboard: GET /users (headers: $headers)');
+
+      final resp = await _apiClient.get(
+        '/users',
+        options: Options(
+          headers: headers,
+          // short timeout so failures show quickly
+          sendTimeout: const Duration(milliseconds: 10000),
+          receiveTimeout: const Duration(milliseconds: 10000),
+        ),
+      );
+
+      print('AdminDashboard: response.statusCode=${resp.statusCode}');
+      print('AdminDashboard: response.data=${resp.data}');
 
       if (!mounted) return;
 
       if (resp.statusCode == 200) {
         final data = resp.data;
         if (data is List) {
-          setState(() {
-            _employees = List<Map<String, dynamic>>.from(data);
-          });
+          setState(() => _employees = List<Map<String, dynamic>>.from(data));
         } else if (data is Map && data['data'] is List) {
-          setState(() {
-            _employees = List<Map<String, dynamic>>.from(data['data']);
-          });
+          setState(
+            () => _employees = List<Map<String, dynamic>>.from(data['data']),
+          );
         } else {
-          throw Exception('Invalid response format');
+          // Unexpected response shape
+          final err = 'Invalid response format from /users';
+          print('AdminDashboard: $err (data type: ${data.runtimeType})');
+          setState(() => _lastError = err);
+          _showErrorSnackBar(err);
+          setState(() => _employees = []);
         }
       } else {
-        throw Exception('Failed to load employees: ${resp.statusCode}');
+        final err = 'Failed to load employees: ${resp.statusCode}';
+        print('AdminDashboard: $err');
+        setState(() => _lastError = err);
+        _showErrorSnackBar(err);
+        setState(() => _employees = []);
       }
-    } catch (e) {
-      if (!mounted) return;
+    } on DioError catch (dioErr) {
+      // Dio-specific errors are very useful: check response, type, message
+      final status = dioErr.response?.statusCode;
+      final respData = dioErr.response?.data;
+      final type = dioErr.type;
+      final message = dioErr.message;
 
-      print('Error loading employees: $e'); // Debug log
+      final errMsg = StringBuffer('DioError: $type');
+      if (status != null) errMsg.write(' status=$status;');
+      errMsg.write(' message=$message;');
+      if (respData != null) errMsg.write(' response=${respData.toString()}');
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text(
-            'Error loading employees. Please check your connection and try again.',
-          ),
-          backgroundColor: Colors.red,
-          action: SnackBarAction(
-            label: 'Retry',
-            textColor: Colors.white,
-            onPressed: _loadEmployees,
-          ),
-        ),
+      print('AdminDashboard: ${errMsg.toString()}');
+
+      // Show helpful snackbar (long) and set inline error
+      setState(() => _lastError = errMsg.toString());
+      _showErrorSnackBar(
+        'Error loading employees: ${dioErr.message} (see console)',
       );
+      setState(() => _employees = []);
+    } catch (e, st) {
+      print('AdminDashboard: Unexpected error: $e\n$st');
+      setState(() => _lastError = e.toString());
+      _showErrorSnackBar('Unexpected error: $e');
+      setState(() => _employees = []);
     } finally {
-      if (mounted) {
-        setState(() => _loading = false);
-      }
+      if (mounted) setState(() => _loading = false);
     }
   }
 
-  // Mock data - replace with actual API calls
+  void _showErrorSnackBar(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 6),
+        action: SnackBarAction(
+          label: 'Retry',
+          textColor: Colors.white,
+          onPressed: _loadEmployees,
+        ),
+      ),
+    );
+  }
+
+  // Mock projects - unchanged
   final List<Map<String, dynamic>> _projects = [
     {
       'srNo': '01',
       'projectNo': '454545',
-      'projectName': 'Mahindra abc',
+      'projectName': 'Mahindra ABC',
       'status': 'Pending',
       'startDate': '14 Feb 2024',
       'endDate': '14 Feb 2024',
       'duration': '3 days',
     },
     {
-      'srNo': '01',
-      'projectNo': '454545',
-      'projectName': 'Mahindra abc',
+      'srNo': '02',
+      'projectNo': '987654',
+      'projectName': 'Tata Motors XYZ',
       'status': 'Completed',
-      'startDate': '14 Feb 2024',
-      'endDate': '14 Feb 2024',
-      'duration': '3 days',
+      'startDate': '10 Jan 2024',
+      'endDate': '15 Jan 2024',
+      'duration': '5 days',
     },
   ];
 
@@ -104,7 +154,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
     showDialog(
       context: context,
-      barrierDismissible: false, // Prevent dismissing while loading
+      barrierDismissible: false,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           title: const Text('Add Employee'),
@@ -122,7 +172,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     validator: (v) =>
                         v == null || v.trim().isEmpty ? 'Required' : null,
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
                   TextFormField(
                     controller: emailController,
                     enabled: !dialogLoading,
@@ -131,14 +181,14 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         ? 'Valid email required'
                         : null,
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
                   TextFormField(
                     controller: passwordController,
                     enabled: !dialogLoading,
                     decoration: const InputDecoration(labelText: 'Password'),
                     obscureText: true,
                     validator: (v) =>
-                        v == null || v.length < 6 ? 'Min 6 chars' : null,
+                        v == null || v.length < 6 ? 'Min 6 characters' : null,
                   ),
                 ],
               ),
@@ -156,9 +206,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   ? null
                   : () async {
                       if (!formKey.currentState!.validate()) return;
-
                       try {
                         setDialogState(() => dialogLoading = true);
+
+                        final headers = <String, String>{};
 
                         final resp = await _apiClient.post(
                           '/users/register',
@@ -168,35 +219,43 @@ class _AdminDashboardState extends State<AdminDashboard> {
                             'password': passwordController.text,
                             'role_name': 'Executor',
                           },
+                          options: Options(headers: headers),
                         );
 
                         if (!context.mounted) return;
 
-                        // Close dialog first
                         Navigator.pop(dialogContext);
 
-                        if (resp.statusCode == 201) {
-                          // Then refresh and show success
-                          _loadEmployees();
+                        if (resp.statusCode == 201 || resp.statusCode == 200) {
+                          await _loadEmployees();
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                              content: Text('Employee created successfully'),
+                              content: Text('Employee added successfully'),
                               backgroundColor: Colors.green,
                             ),
                           );
                         } else {
+                          final err =
+                              'Failed to create employee: ${resp.statusCode}';
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text(
-                                'Failed to create employee: ${resp.statusCode}',
-                              ),
+                              content: Text(err),
                               backgroundColor: Colors.red,
                             ),
                           );
                         }
+                      } on DioError catch (dioErr) {
+                        if (!context.mounted) return;
+                        final msg =
+                            'Error creating employee: ${dioErr.message}';
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(msg),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
                       } catch (e) {
                         if (!context.mounted) return;
-
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text('Error creating employee: $e'),
@@ -204,21 +263,95 @@ class _AdminDashboardState extends State<AdminDashboard> {
                           ),
                         );
                       } finally {
-                        if (mounted) {
+                        if (mounted)
                           setDialogState(() => dialogLoading = false);
-                        }
                       }
                     },
               child: dialogLoading
                   ? const SizedBox(
-                      height: 20,
-                      width: 20,
+                      height: 18,
+                      width: 18,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Text('Add Employee'),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _employeesTable() {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_lastError != null) {
+      // show inline error with retry
+      return Column(
+        children: [
+          Card(
+            color: Colors.red.shade50,
+            child: Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: Row(
+                children: [
+                  const Icon(Icons.error_outline, color: Colors.red),
+                  const SizedBox(width: 12),
+                  Expanded(child: Text('Error loading employees: $_lastError')),
+                  TextButton(
+                    onPressed: _loadEmployees,
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+      );
+    }
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: DataTable(
+        columns: const [
+          DataColumn(label: Text('Name')),
+          DataColumn(label: Text('Email')),
+          DataColumn(label: Text('Role')),
+          DataColumn(label: Text('Status')),
+        ],
+        rows: _employees.map((employee) {
+          final statusRaw = (employee['status'] ?? '').toString();
+          final isActive = statusRaw.toLowerCase() == 'active';
+          return DataRow(
+            cells: [
+              DataCell(Text(employee['name'] ?? '')),
+              DataCell(Text(employee['email'] ?? '')),
+              DataCell(Text(employee['role']?['role_name'] ?? '')),
+              DataCell(
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isActive
+                        ? Colors.green.withOpacity(0.1)
+                        : Colors.grey.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    employee['status'] ?? 'unknown',
+                    style: TextStyle(
+                      color: isActive ? Colors.green : Colors.grey,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        }).toList(),
       ),
     );
   }
@@ -231,7 +364,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Top stats row
+            // Top row
             Row(
               children: [
                 Expanded(
@@ -271,15 +404,21 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 ),
                 const SizedBox(width: 16),
                 ElevatedButton.icon(
-                  onPressed: _showAddEmployeeDialog,
+                  onPressed: _loading ? null : _showAddEmployeeDialog,
                   icon: const Icon(Icons.add),
-                  label: const Text('Add employee'),
+                  label: const Text('Add Employee'),
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 24,
                       vertical: 16,
                     ),
                   ),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  onPressed: _loading ? null : _loadEmployees,
+                  icon: const Icon(Icons.refresh),
+                  tooltip: 'Reload Employees',
                 ),
               ],
             ),
@@ -300,71 +439,21 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    _loading
-                        ? const Center(child: CircularProgressIndicator())
-                        : SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: DataTable(
-                              columns: const [
-                                DataColumn(label: Text('Name')),
-                                DataColumn(label: Text('Email')),
-                                DataColumn(label: Text('Role')),
-                                DataColumn(label: Text('Status')),
-                              ],
-                              rows: _employees.map((employee) {
-                                final isActive = employee['status'] == 'active';
-                                return DataRow(
-                                  cells: [
-                                    DataCell(Text(employee['name'] ?? '')),
-                                    DataCell(Text(employee['email'] ?? '')),
-                                    DataCell(
-                                      Text(
-                                        employee['role']?['role_name'] ?? '',
-                                      ),
-                                    ),
-                                    DataCell(
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 8,
-                                          vertical: 4,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: isActive
-                                              ? Colors.green.withOpacity(0.1)
-                                              : Colors.grey.withOpacity(0.1),
-                                          borderRadius: BorderRadius.circular(
-                                            4,
-                                          ),
-                                        ),
-                                        child: Text(
-                                          employee['status'] ?? 'unknown',
-                                          style: TextStyle(
-                                            color: isActive
-                                                ? Colors.green
-                                                : Colors.grey,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                );
-                              }).toList(),
-                            ),
-                          ),
+                    _employeesTable(),
                   ],
                 ),
               ),
             ),
+
             const SizedBox(height: 32),
 
-            // Projects section
+            // Projects
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Search bar and download button
                     Row(
                       children: [
                         Expanded(
@@ -381,27 +470,23 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         ),
                         const SizedBox(width: 16),
                         ElevatedButton.icon(
-                          onPressed: () {
-                            // Implement download functionality
-                          },
+                          onPressed: () {},
                           icon: const Icon(Icons.download),
                           label: const Text('Download'),
                         ),
                       ],
                     ),
                     const SizedBox(height: 16),
-
-                    // Projects table
                     SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: DataTable(
                         columns: const [
                           DataColumn(label: Text('Sr. No.')),
                           DataColumn(label: Text('Project No.')),
-                          DataColumn(label: Text('Project name')),
+                          DataColumn(label: Text('Project Name')),
                           DataColumn(label: Text('Status')),
-                          DataColumn(label: Text('Start date')),
-                          DataColumn(label: Text('End date')),
+                          DataColumn(label: Text('Start Date')),
+                          DataColumn(label: Text('End Date')),
                           DataColumn(label: Text('Duration')),
                         ],
                         rows: _projects.map((project) {
@@ -423,14 +508,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                         : Colors.yellow.withOpacity(0.1),
                                     borderRadius: BorderRadius.circular(4),
                                   ),
-                                  child: Text(
-                                    project['status'],
-                                    style: TextStyle(
-                                      color: isCompleted
-                                          ? Colors.green
-                                          : Colors.orange,
-                                    ),
-                                  ),
+                                  child: Text(project['status']),
                                 ),
                               ),
                               DataCell(Text(project['startDate'])),
