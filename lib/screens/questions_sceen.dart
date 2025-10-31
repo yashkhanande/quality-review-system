@@ -9,14 +9,12 @@ import 'package:flutter/foundation.dart';
 import '../utils/paste_helper.dart';
 import 'package:dio/dio.dart';
 
-// Upload state types for per-image progress tracking
 enum UploadStatus { pending, uploading, success, failed }
 
 class ImageUploadState {
   UploadStatus status;
-  double progress; // 0.0..1.0
+  double progress;
   CancelToken? cancelToken;
-
   ImageUploadState({
     this.status = UploadStatus.pending,
     this.progress = 0.0,
@@ -28,7 +26,6 @@ class ImageUploadState {
 class Question {
   final String mainQuestion;
   final List<String> subQuestions;
-
   Question({required this.mainQuestion, required this.subQuestions});
 }
 
@@ -53,8 +50,8 @@ class QuestionsScreen extends StatefulWidget {
 
 class _QuestionsScreenState extends State<QuestionsScreen> {
   final Map<String, Map<String, dynamic>> answers = {};
-  // track per-subquestion upload states
   final Map<String, List<ImageUploadState>> uploadStates = {};
+  final Set<int> expandedIndexes = {};
 
   final List<Question> checklist = [
     Question(
@@ -200,15 +197,13 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
     ),
   ];
 
-  void _submitChecklist() {
-    _uploadAndSubmit();
-  }
+  // --- Submit Checklist ---
+  void _submitChecklist() => _uploadAndSubmit();
 
   Future<void> _uploadAndSubmit() async {
     final uploadService = UploadService();
     final checklistService = ChecklistService();
 
-    // Copy answers and replace image bytes with uploaded URLs
     final Map<String, dynamic> payload = {
       "projectTitle": widget.projectTitle,
       "leaders": widget.leaders,
@@ -235,7 +230,6 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
             final filename =
                 srcName ??
                 'upload_${DateTime.now().millisecondsSinceEpoch}_$idx.png';
-
             final cancelToken = CancelToken();
             try {
               final url = await uploadService.uploadBytesWithProgress(
@@ -288,100 +282,17 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
     }
   }
 
-  void _addQuestionDialog() {
-    final TextEditingController mainQController = TextEditingController();
-    final TextEditingController subQController = TextEditingController();
-    List<String> subQs = [];
-
-    showDialog(
-      context: context,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setStateDialog) {
-            return AlertDialog(
-              title: const Text("Add New Question"),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: mainQController,
-                      decoration: const InputDecoration(
-                        labelText: "Main Question",
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: subQController,
-                      decoration: const InputDecoration(
-                        labelText: "Sub Question",
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    ElevatedButton(
-                      onPressed: () {
-                        if (subQController.text.trim().isNotEmpty) {
-                          setStateDialog(() {
-                            subQs.add(subQController.text.trim());
-                            subQController.clear();
-                          });
-                        }
-                      },
-                      child: const Text("Add Sub Question"),
-                    ),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 6,
-                      children: subQs
-                          .map(
-                            (q) => Chip(
-                              label: Text(q),
-                              onDeleted: () {
-                                setStateDialog(() => subQs.remove(q));
-                              },
-                            ),
-                          )
-                          .toList(),
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text("Cancel"),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    if (mainQController.text.trim().isNotEmpty) {
-                      setState(() {
-                        checklist.add(
-                          Question(
-                            mainQuestion: mainQController.text.trim(),
-                            subQuestions: subQs,
-                          ),
-                        );
-                      });
-                      Navigator.pop(ctx);
-                    }
-                  },
-                  child: const Text("Save"),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
+  // --- Build UI ---
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Text(
           "Checklist - ${widget.projectTitle}",
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w400),
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w400,
+          ),
         ),
         backgroundColor: Colors.blue,
       ),
@@ -391,37 +302,62 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
           itemCount: checklist.length,
           itemBuilder: (context, index) {
             final question = checklist[index];
+            final isExpanded = expandedIndexes.contains(index);
+
             return Card(
+              margin: const EdgeInsets.symmetric(vertical: 8),
               shape: RoundedRectangleBorder(
-                side: BorderSide(color: Colors.blue),
-                borderRadius: BorderRadiusGeometry.circular(10),
+                borderRadius: BorderRadius.circular(10),
+                side: const BorderSide(color: Colors.blue),
               ),
-              margin: const EdgeInsets.symmetric(vertical: 10),
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
+              child: Column(
+                children: [
+                  ListTile(
+                    title: Text(
                       question.mainQuestion,
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    const SizedBox(height: 10),
-                    ...question.subQuestions.map((subQ) {
-                      return SubQuestionCard(
-                        subQuestion: subQ,
-                        onAnswer: (ans) {
-                          setState(() {
-                            answers[subQ] = ans;
-                          });
-                        },
-                      );
-                    }),
-                  ],
-                ),
+                    trailing: Icon(
+                      isExpanded
+                          ? Icons.keyboard_arrow_up
+                          : Icons.keyboard_arrow_down,
+                    ),
+                    onTap: () {
+                      setState(() {
+                        if (isExpanded) {
+                          expandedIndexes.remove(index);
+                        } else {
+                          expandedIndexes.add(index);
+                        }
+                      });
+                    },
+                  ),
+                  if (isExpanded)
+                    Padding(
+                      padding: const EdgeInsets.all(12.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: question.subQuestions.map((subQ) {
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 10.0),
+                            child: SubQuestionCard(
+                              key: ValueKey(subQ),
+                              subQuestion: subQ,
+                              initialData: answers[subQ],
+                              onAnswer: (ans) {
+                                setState(() {
+                                  answers[subQ] = ans;
+                                });
+                              },
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                ],
               ),
             );
           },
@@ -435,31 +371,26 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
             backgroundColor: Colors.blue,
             padding: const EdgeInsets.all(16),
           ),
-
           child: const Text(
             "Submit Checklist",
             style: TextStyle(fontSize: 18, color: Colors.white),
           ),
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _addQuestionDialog,
-        backgroundColor: Colors.blue,
-        child: const Icon(Icons.add, color: Colors.white),
-      ),
     );
   }
 }
 
-// --- Sub Question Card ---
+// --- SubQuestionCard (Persistent State) ---
 class SubQuestionCard extends StatefulWidget {
   final String subQuestion;
+  final Map<String, dynamic>? initialData;
   final Function(Map<String, dynamic>) onAnswer;
-
   const SubQuestionCard({
     super.key,
     required this.subQuestion,
     required this.onAnswer,
+    this.initialData,
   });
 
   @override
@@ -469,8 +400,21 @@ class SubQuestionCard extends StatefulWidget {
 class _SubQuestionCardState extends State<SubQuestionCard> {
   String? selectedOption;
   final TextEditingController remarkController = TextEditingController();
-  // Each image is stored as a map: { 'bytes': Uint8List, 'name': String? }
   List<Map<String, dynamic>> _images = [];
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialData != null) {
+      selectedOption = widget.initialData!['answer'];
+      remarkController.text = widget.initialData!['remark'] ?? '';
+      final imgs = widget.initialData!['images'];
+      if (imgs is List) {
+        _images = List<Map<String, dynamic>>.from(imgs);
+      }
+    }
+  }
+
   void _updateAnswer() {
     widget.onAnswer({
       "answer": selectedOption,
@@ -481,7 +425,6 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
 
   Future<void> _pickImages() async {
     try {
-      // Use FilePicker to allow multi-selection on desktop/mobile
       final result = await FilePicker.platform.pickFiles(
         allowMultiple: true,
         type: FileType.image,
@@ -502,14 +445,15 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
 
   late DropzoneViewController _dropCtrl;
 
-  // For web/desktop: paste handler could be added later using RawKeyboard/Clipboard APIs
-
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(widget.subQuestion, style: const TextStyle(fontSize: 14)),
+        Text(
+          widget.subQuestion,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+        ),
         RadioListTile<String>(
           title: const Text("Yes"),
           value: "Yes",
@@ -528,121 +472,30 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
             _updateAnswer();
           },
         ),
-        SizedBox(
-          width: MediaQuery.of(context).size.width,
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: remarkController,
-                  onChanged: (val) {
-                    _updateAnswer();
-                  },
-                  decoration: InputDecoration(
-                    filled: true,
-                    fillColor: Colors.grey.shade100,
-                    hintText: "Remark",
-                    border: const OutlineInputBorder(
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: remarkController,
+                onChanged: (val) => _updateAnswer(),
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: Colors.grey.shade100,
+                  hintText: "Remark",
+                  border: const OutlineInputBorder(borderSide: BorderSide.none),
                 ),
               ),
-              IconButton(
-                onPressed: () {
-                  _pickImages();
-                },
-                icon: const Icon(
-                  Icons.add_a_photo_outlined,
-                  color: Colors.black,
-                ),
-              ),
-              const SizedBox(width: 8),
-              // Dropzone area small button to toggle drop support preview
-              ElevatedButton(
-                onPressed: () async {
-                  // open a dialog with a larger drop area on web
-                  if (Theme.of(context).platform == TargetPlatform.android ||
-                      Theme.of(context).platform == TargetPlatform.iOS) {
-                    _pickImages();
-                    return;
-                  }
-                  await showDialog(
-                    context: context,
-                    builder: (ctx) {
-                      PasteSubscription? pasteSub;
-                      if (kIsWeb) {
-                        pasteSub = addPasteListener((bytes) {
-                          setState(
-                            () => _images.add({'bytes': bytes, 'name': null}),
-                          );
-                          _updateAnswer();
-                        });
-                      }
-
-                      return AlertDialog(
-                        title: const Text(
-                          'Drop images here or click to pick (paste with Ctrl/Cmd+V)',
-                        ),
-                        content: SizedBox(
-                          width: 600,
-                          height: 300,
-                          child: DropzoneView(
-                            onCreated: (c) => _dropCtrl = c,
-                            onLoaded: () => debugPrint('dropzone loaded'),
-                            onError: (e) => debugPrint('dropzone error: $e'),
-                            onDrop: (ev) async {
-                              try {
-                                final bytes = await _dropCtrl.getFileData(ev);
-                                String? name;
-                                try {
-                                  name = await _dropCtrl.getFilename(ev);
-                                } catch (_) {
-                                  name = null;
-                                }
-                                setState(
-                                  () => _images.add({
-                                    'bytes': Uint8List.fromList(bytes),
-                                    'name': name,
-                                  }),
-                                );
-                                _updateAnswer();
-                              } catch (e) {
-                                debugPrint('drop processing error: $e');
-                              }
-                            },
-                          ),
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () {
-                              pasteSub?.cancel();
-                              Navigator.pop(ctx);
-                            },
-                            child: const Text('Close'),
-                          ),
-                          ElevatedButton(
-                            onPressed: () async {
-                              pasteSub?.cancel();
-                              await _pickImages();
-                              Navigator.pop(ctx);
-                            },
-                            child: const Text('Pick files'),
-                          ),
-                        ],
-                      );
-                    },
-                  );
-                },
-                child: const Text('Drop/Paste'),
-              ),
-            ],
-          ),
+            ),
+            IconButton(
+              onPressed: _pickImages,
+              icon: const Icon(Icons.add_a_photo_outlined, color: Colors.black),
+            ),
+          ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
         if (_images.isNotEmpty)
           SizedBox(
-            height: 120,
+            height: 100,
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
               itemCount: _images.length,
@@ -651,15 +504,15 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
                 final bytes = img['bytes'] as Uint8List;
                 final name = img['name'] as String?;
                 return Padding(
-                  padding: const EdgeInsets.only(right: 8.0),
+                  padding: const EdgeInsets.only(right: 8),
                   child: Stack(
                     children: [
                       ClipRRect(
                         borderRadius: BorderRadius.circular(6),
                         child: Image.memory(
                           bytes,
-                          width: 120,
-                          height: 120,
+                          width: 100,
+                          height: 100,
                           fit: BoxFit.cover,
                         ),
                       ),
@@ -673,18 +526,13 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
                             });
                             _updateAnswer();
                           },
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: Colors.black54,
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Padding(
-                              padding: EdgeInsets.all(4.0),
-                              child: Icon(
-                                Icons.close,
-                                size: 16,
-                                color: Colors.white,
-                              ),
+                          child: const CircleAvatar(
+                            radius: 10,
+                            backgroundColor: Colors.black54,
+                            child: Icon(
+                              Icons.close,
+                              size: 14,
+                              color: Colors.white,
                             ),
                           ),
                         ),
@@ -695,19 +543,15 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
                           bottom: 4,
                           right: 4,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 4,
-                              vertical: 2,
-                            ),
                             color: Colors.black45,
+                            padding: const EdgeInsets.all(2),
                             child: Text(
                               name,
                               style: const TextStyle(
                                 color: Colors.white,
-                                fontSize: 11,
+                                fontSize: 10,
                               ),
                               overflow: TextOverflow.ellipsis,
-                              maxLines: 1,
                             ),
                           ),
                         ),
