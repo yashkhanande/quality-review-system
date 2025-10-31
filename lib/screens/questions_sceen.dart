@@ -22,14 +22,12 @@ class ImageUploadState {
   });
 }
 
-// --- Data Model ---
 class Question {
   final String mainQuestion;
   final List<String> subQuestions;
   Question({required this.mainQuestion, required this.subQuestions});
 }
 
-// --- Screen ---
 class QuestionsScreen extends StatefulWidget {
   final String projectTitle;
   final List<String> leaders;
@@ -49,9 +47,10 @@ class QuestionsScreen extends StatefulWidget {
 }
 
 class _QuestionsScreenState extends State<QuestionsScreen> {
-  final Map<String, Map<String, dynamic>> answers = {};
-  final Map<String, List<ImageUploadState>> uploadStates = {};
-  final Set<int> expandedIndexes = {};
+  final Map<String, Map<String, dynamic>> executorAnswers = {};
+  final Map<String, Map<String, dynamic>> reviewerAnswers = {};
+  final Set<int> executorExpanded = {};
+  final Set<int> reviewerExpanded = {};
 
   final List<Question> checklist = [
     Question(
@@ -197,200 +196,206 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
     ),
   ];
 
-  // --- Submit Checklist ---
-  void _submitChecklist() => _uploadAndSubmit();
-
-  Future<void> _uploadAndSubmit() async {
-    final uploadService = UploadService();
-    final checklistService = ChecklistService();
-
-    final Map<String, dynamic> payload = {
-      "projectTitle": widget.projectTitle,
-      "leaders": widget.leaders,
-      "reviewers": widget.reviewers,
-      "executors": widget.executors,
-      "answers": {},
-    };
-
-    for (final entry in answers.entries) {
-      final key = entry.key;
-      final map = Map<String, dynamic>.from(entry.value);
-      if (map.containsKey('images') && map['images'] is List) {
-        final List<dynamic> images = map['images'];
-        final List<String> urls = [];
-        uploadStates[key] = List.generate(
-          images.length,
-          (i) => ImageUploadState(),
-        );
-        int idx = 0;
-        for (final imgEntry in images) {
-          if (imgEntry is Map && imgEntry['bytes'] is Uint8List) {
-            final bytes = imgEntry['bytes'] as Uint8List;
-            final srcName = imgEntry['name'] as String?;
-            final filename =
-                srcName ??
-                'upload_${DateTime.now().millisecondsSinceEpoch}_$idx.png';
-            final cancelToken = CancelToken();
-            try {
-              final url = await uploadService.uploadBytesWithProgress(
-                bytes,
-                filename,
-                (sent, total) {
-                  setState(() {
-                    uploadStates[key]![idx].progress = total > 0
-                        ? sent / total
-                        : 0.0;
-                  });
-                },
-                cancelToken: cancelToken,
-              );
-              urls.add(url);
-              setState(() {
-                uploadStates[key]![idx].status = UploadStatus.success;
-              });
-            } catch (e) {
-              debugPrint('upload failed: $e');
-              setState(() {
-                uploadStates[key]![idx].status = UploadStatus.failed;
-              });
-            }
-          }
-          idx++;
-        }
-        map['images'] = urls;
-      }
-      payload['answers'][key] = map;
-    }
-
-    try {
-      final resp = await checklistService.submitChecklist(payload);
-      debugPrint('Checklist submit response: ${resp.statusCode} ${resp.data}');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            "Checklist submitted successfully!",
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-          backgroundColor: Colors.green,
-        ),
-      );
-    } catch (e) {
-      debugPrint('Checklist submission failed: $e');
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Submit failed: $e')));
-    }
-  }
-
-  // --- Build UI ---
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Text(
           "Checklist - ${widget.projectTitle}",
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w400,
-          ),
+          style: const TextStyle(color: Colors.white),
         ),
         backgroundColor: Colors.blue,
       ),
       body: SafeArea(
-        child: ListView.builder(
-          padding: const EdgeInsets.all(20),
-          itemCount: checklist.length,
-          itemBuilder: (context, index) {
-            final question = checklist[index];
-            final isExpanded = expandedIndexes.contains(index);
-
-            return Card(
-              margin: const EdgeInsets.symmetric(vertical: 8),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-                side: const BorderSide(color: Colors.blue),
-              ),
+        child: Row(
+          children: [
+            // Executor Column
+            Expanded(
               child: Column(
                 children: [
-                  ListTile(
-                    title: Text(
-                      question.mainQuestion,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
+                  Container(
+                    width: double.infinity,
+                    color: Colors.blue.shade100,
+                    padding: const EdgeInsets.all(12),
+                    child: const Center(
+                      child: Text(
+                        "Executor Section",
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 18),
                       ),
                     ),
-                    trailing: Icon(
-                      isExpanded
-                          ? Icons.keyboard_arrow_up
-                          : Icons.keyboard_arrow_down,
-                    ),
-                    onTap: () {
-                      setState(() {
-                        if (isExpanded) {
-                          expandedIndexes.remove(index);
-                        } else {
-                          expandedIndexes.add(index);
-                        }
-                      });
-                    },
                   ),
-                  if (isExpanded)
-                    Padding(
-                      padding: const EdgeInsets.all(12.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: question.subQuestions.map((subQ) {
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 10.0),
-                            child: SubQuestionCard(
-                              key: ValueKey(subQ),
-                              subQuestion: subQ,
-                              initialData: answers[subQ],
-                              onAnswer: (ans) {
-                                setState(() {
-                                  answers[subQ] = ans;
-                                });
-                              },
-                            ),
-                          );
-                        }).toList(),
-                      ),
+                  Expanded(
+                    child: ListView.builder(
+                      padding: const EdgeInsets.all(8),
+                      itemCount: checklist.length,
+                      itemBuilder: (context, index) {
+                        final question = checklist[index];
+                        final isExpanded = executorExpanded.contains(index);
+                        return Card(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            side: const BorderSide(color: Colors.blue),
+                          ),
+                          margin: const EdgeInsets.symmetric(vertical: 6),
+                          child: Column(
+                            children: [
+                              ListTile(
+                                title: Text(
+                                  question.mainQuestion,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold),
+                                ),
+                                trailing: Icon(isExpanded
+                                    ? Icons.keyboard_arrow_up
+                                    : Icons.keyboard_arrow_down),
+                                onTap: () {
+                                  setState(() {
+                                    if (isExpanded) {
+                                      executorExpanded.remove(index);
+                                    } else {
+                                      executorExpanded.add(index);
+                                    }
+                                  });
+                                },
+                              ),
+                              if (isExpanded)
+                                Padding(
+                                  padding: const EdgeInsets.all(12.0),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                    CrossAxisAlignment.start,
+                                    children:
+                                    question.subQuestions.map((subQ) {
+                                      return Padding(
+                                        padding:
+                                        const EdgeInsets.only(bottom: 10),
+                                        child: SubQuestionCard(
+                                          key: ValueKey("executor_$subQ"),
+                                          subQuestion: subQ,
+                                          initialData: executorAnswers[subQ],
+                                          onAnswer: (ans) {
+                                            setState(() {
+                                              executorAnswers[subQ] = ans;
+                                            });
+                                          },
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        );
+                      },
                     ),
+                  ),
                 ],
               ),
-            );
-          },
-        ),
-      ),
-      bottomNavigationBar: Padding(
-        padding: const EdgeInsets.all(12),
-        child: ElevatedButton(
-          onPressed: _submitChecklist,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.blue,
-            padding: const EdgeInsets.all(16),
-          ),
-          child: const Text(
-            "Submit Checklist",
-            style: TextStyle(fontSize: 18, color: Colors.white),
-          ),
+            ),
+
+            // Reviewer Column
+            Expanded(
+              child: Column(
+                children: [
+                  Container(
+                    width: double.infinity,
+                    color: Colors.green.shade100,
+                    padding: const EdgeInsets.all(12),
+                    child: const Center(
+                      child: Text(
+                        "Reviewer Section",
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 18),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: ListView.builder(
+                      padding: const EdgeInsets.all(8),
+                      itemCount: checklist.length,
+                      itemBuilder: (context, index) {
+                        final question = checklist[index];
+                        final isExpanded = reviewerExpanded.contains(index);
+                        return Card(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            side: const BorderSide(color: Colors.green),
+                          ),
+                          margin: const EdgeInsets.symmetric(vertical: 6),
+                          child: Column(
+                            children: [
+                              ListTile(
+                                title: Text(
+                                  question.mainQuestion,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold),
+                                ),
+                                trailing: Icon(isExpanded
+                                    ? Icons.keyboard_arrow_up
+                                    : Icons.keyboard_arrow_down),
+                                onTap: () {
+                                  setState(() {
+                                    if (isExpanded) {
+                                      reviewerExpanded.remove(index);
+                                    } else {
+                                      reviewerExpanded.add(index);
+                                    }
+                                  });
+                                },
+                              ),
+                              if (isExpanded)
+                                Padding(
+                                  padding: const EdgeInsets.all(12.0),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                    CrossAxisAlignment.start,
+                                    children:
+                                    question.subQuestions.map((subQ) {
+                                      return Padding(
+                                        padding:
+                                        const EdgeInsets.only(bottom: 10),
+                                        child: SubQuestionCard(
+                                          key: ValueKey("reviewer_$subQ"),
+                                          subQuestion: subQ,
+                                          initialData: reviewerAnswers[subQ],
+                                          onAnswer: (ans) {
+                                            setState(() {
+                                              reviewerAnswers[subQ] = ans;
+                                            });
+                                          },
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-// --- SubQuestionCard (Persistent State) ---
+// --- SubQuestionCard ---
 class SubQuestionCard extends StatefulWidget {
   final String subQuestion;
   final Map<String, dynamic>? initialData;
   final Function(Map<String, dynamic>) onAnswer;
+
   const SubQuestionCard({
     super.key,
     required this.subQuestion,
-    required this.onAnswer,
     this.initialData,
+    required this.onAnswer,
   });
 
   @override
@@ -443,8 +448,6 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
     }
   }
 
-  late DropzoneViewController _dropCtrl;
-
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -452,7 +455,7 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
       children: [
         Text(
           widget.subQuestion,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
         ),
         RadioListTile<String>(
           title: const Text("Yes"),
@@ -487,12 +490,11 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
               ),
             ),
             IconButton(
+              icon: const Icon(Icons.add_a_photo_outlined),
               onPressed: _pickImages,
-              icon: const Icon(Icons.add_a_photo_outlined, color: Colors.black),
-            ),
+            )
           ],
         ),
-        const SizedBox(height: 10),
         if (_images.isNotEmpty)
           SizedBox(
             height: 100,
@@ -509,38 +511,29 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
                     children: [
                       ClipRRect(
                         borderRadius: BorderRadius.circular(6),
-                        child: Image.memory(
-                          bytes,
-                          width: 100,
-                          height: 100,
-                          fit: BoxFit.cover,
-                        ),
+                        child: Image.memory(bytes,
+                            width: 100, height: 100, fit: BoxFit.cover),
                       ),
                       Positioned(
-                        top: 4,
                         right: 4,
+                        top: 4,
                         child: GestureDetector(
                           onTap: () {
-                            setState(() {
-                              _images.removeAt(i);
-                            });
+                            setState(() => _images.removeAt(i));
                             _updateAnswer();
                           },
                           child: const CircleAvatar(
                             radius: 10,
                             backgroundColor: Colors.black54,
-                            child: Icon(
-                              Icons.close,
-                              size: 14,
-                              color: Colors.white,
-                            ),
+                            child: Icon(Icons.close,
+                                color: Colors.white, size: 14),
                           ),
                         ),
                       ),
                       if (name != null)
                         Positioned(
-                          left: 4,
                           bottom: 4,
+                          left: 4,
                           right: 4,
                           child: Container(
                             color: Colors.black45,
@@ -548,13 +541,11 @@ class _SubQuestionCardState extends State<SubQuestionCard> {
                             child: Text(
                               name,
                               style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                              ),
+                                  color: Colors.white, fontSize: 10),
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                        ),
+                        )
                     ],
                   ),
                 );
